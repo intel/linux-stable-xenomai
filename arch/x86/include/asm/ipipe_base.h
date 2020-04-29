@@ -59,13 +59,23 @@
 #include <asm/apicdef.h>
 
 extern unsigned int cpu_khz;
+extern unsigned int tsc_khz;
 
 static inline const char *ipipe_clock_name(void)
 {
 	return "tsc";
 }
 
-#define __ipipe_cpu_freq	({ u64 __freq = 1000ULL * cpu_khz; __freq; })
+#define __ipipe_cpu_freq    \
+({                          \
+    u64 __freq;             \
+    if(!boot_cpu_has(X86_FEATURE_TSC) || !tsc_khz) \
+        __freq = 1000ULL * cpu_khz;           \
+    else                            \
+        __freq = 1000ULL * tsc_khz;  \
+    __freq; \
+})
+
 #define __ipipe_hrclock_freq	__ipipe_cpu_freq
 
 #ifdef CONFIG_X86_32
