@@ -3714,6 +3714,62 @@ DEFINE_SIMPLE_ATTRIBUTE(i915_cache_sharing_fops,
 			i915_cache_sharing_get, i915_cache_sharing_set,
 			"%llu\n");
 
+static int
+i915_sagv_disable_set(void *data, u64 val)
+{
+	/* SAGV (System Agent Geyserville)'s offical name is System Agent
+	 * Speedstep, it dynamically adjust the system agent's voltage
+	 * and frequency for power saving. SAGV's point change will cause
+	 * DRAM's frequency change accordingly, and DRAM is not accessible
+	 * during the change. Disable SAGV will tune the system more
+	 * deterministic. If SAGV already disabled by BIOS, then it's not
+	 * possible to disable SAGV via send request to P-Unit mailbox.
+	 *
+	 * CAUTION: this debugfs interface is a work around operation,
+	 * it doesn't cope with of the state integrity of i915.
+	 *
+	 * Ref:
+	 * https://01.org/sites/default/files/documentation/
+	 * intel-gfx-prm-osrc-kbl-vol12-display.pdf
+	 */
+	struct drm_i915_private *dev_priv = data;
+
+	if (!(IS_GEN_RANGE(dev_priv, 6, 12)))
+		return -ENODEV;
+
+	if (val > 1)
+		return -EINVAL;
+
+	DRM_DEBUG_DRIVER("Manually request sagv disable: %llu\n", val);
+
+	if (val)
+		intel_disable_sagv(dev_priv);
+	else
+		intel_enable_sagv(dev_priv);
+
+	return 0;
+}
+
+static int
+i915_sagv_disable_get(void *data, u64 *val)
+{
+	struct drm_i915_private *dev_priv = data;
+
+	if (!(IS_GEN_RANGE(dev_priv, 6, 12)))
+		return -ENODEV;
+
+	if (dev_priv->sagv_status == I915_SAGV_DISABLED)
+		*val = 1;
+	else
+		*val = 0;
+
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(i915_sagv_disable_fops,
+			i915_sagv_disable_get, i915_sagv_disable_set,
+			"%llu\n");
+
 static void cherryview_sseu_device_status(struct drm_i915_private *dev_priv,
 					  struct sseu_dev_info *sseu)
 {
@@ -4330,6 +4386,7 @@ static const struct i915_debugfs_files {
 	{"i915_perf_noa_delay", &i915_perf_noa_delay_fops},
 	{"i915_wedged", &i915_wedged_fops},
 	{"i915_cache_sharing", &i915_cache_sharing_fops},
+	{"i915_sagv_disable", &i915_sagv_disable_fops},
 	{"i915_gem_drop_caches", &i915_drop_caches_fops},
 #if IS_ENABLED(CONFIG_DRM_I915_CAPTURE_ERROR)
 	{"i915_error_state", &i915_error_state_fops},
